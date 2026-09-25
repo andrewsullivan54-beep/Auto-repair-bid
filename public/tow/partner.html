@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tow Jobs — Partner Board</title>
+<link rel="stylesheet" href="/css/style.css">
+<style>
+.bell { position: relative; }
+.bell .badge {
+  position: absolute; top: -6px; right: -8px;
+  background: #e5484d; color: #fff; font-size: 11px; font-weight: 800;
+  border-radius: 999px; min-width: 18px; height: 18px; line-height: 18px;
+  text-align: center; padding: 0 4px;
+}
+.countdown { font-weight: 900; color: #f5b301; font-size: 20px; }
+.countdown.urgent { color: #e5484d; }
+.notif { border-left: 3px solid #f5b301; padding: 8px 10px; margin: 8px 0;
+  background: rgba(245,179,1,.06); border-radius: 0 8px 8px 0; }
+.notif.unread { background: rgba(245,179,1,.14); }
+.notif .t { font-weight: 700; }
+.notif .when { color: var(--muted); font-size: 12px; }
+#notifPanel { display: none; }
+.btn-row2 { display: flex; gap: 10px; }
+.btn-row2 .btn { flex: 1; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <span></span>
+    <div class="brand"><span class="car">🛻</span> TOW <b>PARTNER</b></div>
+    <button class="icon-btn bell" id="bellBtn" title="Notifications">🔔<span class="badge" id="bellBadge" style="display:none">0</span></button>
+  </div>
+  <div class="wrap">
+    <div class="row">
+      <div class="grow">
+        <h1 style="margin-bottom:0">Tow Jobs</h1>
+        <p class="sub" id="partnerLine" style="margin-top:2px"></p>
+      </div>
+      <button class="icon-btn" id="logoutBtn" title="Log out" style="font-size:16px">⏻</button>
+    </div>
+    <div class="err" id="err"></div>
+
+    <div id="notifPanel" class="card">
+      <div class="row"><div class="grow"><h3 style="margin:0">🔔 Notifications</h3></div>
+        <button class="btn btn-ghost" id="markRead" style="width:auto;padding:6px 12px;font-size:13px">Mark all read</button>
+      </div>
+      <div id="notifList"></div>
+    </div>
+
+    <h2>📣 Incoming Offers</h2>
+    <p class="hint">Tows are offered to you for a limited time. Accept before the timer runs out or the job rolls to the next partner.</p>
+    <div id="offers"></div>
+
+    <h2>🛻 My Active Jobs</h2>
+    <div id="active"></div>
+
+    <h2>📜 History</h2>
+    <div id="history"></div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let me = null;
+let timer = null;
+
+function fmtLeft(expiresAt) {
+  const left = new Date(expiresAt + 'Z').getTime() - Date.now();
+  if (left <= 0) return { text: 'expired', secs: 0 };
+  const s = Math.floor(left / 1000);
+  const m = Math.floor(s / 60);
+  return { text: m > 0 ? m + 'm ' + (s % 60) + 's' : s + 's', secs: s };
+}
+
+function tag(s) {
+  return s === 'completed' ? '<span class="tag green">✓ Completed</span>'
+    : s === 'cancelled' ? '<span class="tag">✕ Cancelled</span>'
+    : '<span class="tag blue">🛻 Accepted</span>';
+}
+
+function veh(t) {
+  return esc([t.year, t.make, t.model].filter(Boolean).join(' ') || 'Vehicle');
+}
+
+async function load() {
+  clearErr();
+  try {
+    const d = await api('/api/tow/partner/jobs');
+    me = d.partner;
+    $('partnerLine').textContent = (d.partner.name || '') + ' · priority ' + d.partner.priority;
+
+    // Bell badge
+    const b = $('bellBadge');
+    if (d.unread > 0) { b.style.display = 'inline-block'; b.textContent = d.unread > 9 ? '9+' : d.unread; }
+    else b.style.display = 'none';
+
+    // Offers with live countdowns
+    const off = $('offers');
+    if (!d.offers.length) {
+      off.innerHTML = '<div class="card center"><p class="sub">No offers right now. New tows come to you first when you\'re priority #1.</p></div>';
+    } else {
+      off.innerHTML = d.offers.map(t => {
+        const c = fmtLeft(t.expires_at);
+        return `<div class="card" data-exp="${esc(t.expires_at)}">
+        <div class="row">
+          <div class="grow"><b>#${t.id} — ${veh(t)}</b><br>
+            <span class="muted small">${esc(t.customer_name || '')}${t.customer_phone ? ' · ' + esc(t.customer_phone) : ''}</span>
+          </div>
+          <span class="countdown ${c.secs < 120 ? 'urgent' : ''}">⏱ ${c.text}</span>
+        </div>
+        <div class="divider"></div>
+        <div class="kv"><span class="k">📍 Pickup</span><span class="v">${esc(t.pickup)}</span></div>
+        <div class="kv"><span class="k">🏁 Dropoff</span><span class="v">${esc(t.dropoff)}</span></div>
+        <div class="kv"><span class="k">🕐 Window</span><span class="v">${esc(t.preferred_window || '—')}</span></div>
+        ${t.notes ? `<div class="kv"><span class="k">📝 Notes</span><span class="v">${esc(t.notes)}</span></div>` : ''}
+        ${t.request_id ? `<div class="kv"><span class="k">🔗 Repair job</span><span class="v">#${t.request_id}</span></div>` : ''}
+        <div class="btn-row2">
+          <button class="btn" onclick="act(${t.id},'accept')">✓ Accept</button>
+          <button class="btn btn-ghost" onclick="act(${t.id},'pass')">Pass</button>
+        </div>
+      </div>`;
+      }).join('');
+    }
+
+    // Active jobs
+    const act2 = $('active');
+    if (!d.mine.length) {
+      act2.innerHTML = '<div class="card center"><p class="sub">Nothing active.</p></div>';
+    } else {
+      act2.innerHTML = d.mine.map(t => `
+      <div class="card">
+        <div class="row">
+          <div class="grow"><b>#${t.id} — ${veh(t)}</b><br>
+            <span class="muted small">${esc(t.customer_name || '')}${t.customer_phone ? ' · ' + esc(t.customer_phone) : ''}</span>
+          </div>
+          ${tag(t.status)}
+        </div>
+        <div class="divider"></div>
+        <div class="kv"><span class="k">📍 Pickup</span><span class="v">${esc(t.pickup)}</span></div>
+        <div class="kv"><span class="k">🏁 Dropoff</span><span class="v">${esc(t.dropoff)}</span></div>
+        <div class="kv"><span class="k">🕐 Window</span><span class="v">${esc(t.preferred_window || '—')}</span></div>
+        ${t.notes ? `<div class="kv"><span class="k">📝 Notes</span><span class="v">${esc(t.notes)}</span></div>` : ''}
+        <button class="btn" onclick="act(${t.id},'complete')">Mark Completed</button>
+      </div>`).join('');
+    }
+
+    // History
+    const h = $('history');
+    h.innerHTML = !d.history.length
+      ? '<div class="card center"><p class="sub">No completed tows yet.</p></div>'
+      : d.history.map(t => `
+      <div class="card"><div class="row"><div class="grow"><b>#${t.id}</b>
+        <span class="muted small"> · ${esc(t.pickup)} → ${esc(t.dropoff)}</span></div>
+        ${tag(t.status)}</div></div>`).join('');
+
+    tickCountdowns();
+  } catch (e) { showErr(e.message); }
+}
+
+function tickCountdowns() {
+  document.querySelectorAll('#offers .card[data-exp]').forEach(card => {
+    const c = fmtLeft(card.getAttribute('data-exp'));
+    const el = card.querySelector('.countdown');
+    if (el) {
+      el.innerHTML = '⏱ ' + c.text;
+      el.classList.toggle('urgent', c.secs < 120);
+    }
+  });
+}
+
+async function act(id, what) {
+  clearErr();
+  try {
+    const r = await api('/api/tow/' + id + '/' + what, { method: 'POST' });
+    if (what === 'pass' && r.unassigned) {
+      alert('You passed. No other partners were available — the tow was flagged for admin attention.');
+    }
+    load();
+  } catch (e) { showErr(e.message); }
+}
+
+async function loadNotifs() {
+  try {
+    const d = await api('/api/tow/partner/notifications');
+    $('notifList').innerHTML = !d.notifications.length
+      ? '<p class="sub">Nothing yet.</p>'
+      : d.notifications.map(n => `
+        <div class="notif ${n.read ? '' : 'unread'}">
+          <div class="t">${esc(n.title)}</div>
+          <div class="small">${esc(n.body || '')}</div>
+          <div class="when">${esc((n.created_at || '').replace(' ', ' · '))}</div>
+        </div>`).join('');
+  } catch (e) { /* non-fatal */ }
+}
+
+(async () => {
+  me = await guard('tow');
+  if (!me) return;
+  $('bellBtn').onclick = async () => {
+    const p = $('notifPanel');
+    const open = p.style.display === 'block';
+    p.style.display = open ? 'none' : 'block';
+    if (!open) loadNotifs();
+  };
+  $('markRead').onclick = async () => {
+    await api('/api/tow/partner/notifications/read', { method: 'POST' });
+    loadNotifs(); load();
+  };
+  $('logoutBtn').onclick = logout;
+  await load();
+  // Refresh offers + countdowns every 20s so expiries roll over on their own
+  timer = setInterval(() => { load(); }, 20000);
+  setInterval(tickCountdowns, 1000);
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Create Your Shop Profile — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <div class="steps" id="steps"></div>
+    <div class="err" id="err"></div>
+
+    <div class="step" data-step="1">
+      <h2>Business Information</h2>
+      <p class="sub">Tell us about your shop.</p>
+      <label>Shop Name *</label>
+      <input type="text" id="shop_name" placeholder="Riverside Auto Care">
+      <label>Phone Number *</label>
+      <input type="tel" id="phone" placeholder="(513) 555-0123">
+      <label>Address *</label>
+      <input type="text" id="address" placeholder="123 Main St, Cincinnati, OH 45202">
+      <label>ZIP Code *</label>
+      <input type="text" id="zip" placeholder="45202" inputmode="numeric" maxlength="10">
+      <label>Service Radius *</label>
+      <select id="radius"><option value="5">5 miles</option><option value="10">10 miles</option><option value="15" selected>15 miles</option><option value="25">25 miles</option><option value="50">50 miles</option></select>
+      <button class="btn" data-next="2">Next</button>
+    </div>
+
+    <div class="step" data-step="2">
+      <h2>Services Offered</h2>
+      <p class="sub">Select the services your shop provides.</p>
+      <div class="choices checks" id="services"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" data-next="1">Back</button>
+        <button class="btn" data-next="3">Next</button>
+      </div>
+    </div>
+
+    <div class="step" data-step="3">
+      <h2>Verification &amp; Documents</h2>
+      <p class="sub">We need to verify your business. Our team will review your information within 1–2 business days.</p>
+      <div class="card">
+        <b>Business License</b><p class="muted small">Upload a photo or PDF</p>
+        <input type="file" id="doc-license" accept="image/*,.pdf" style="margin-top:8px">
+      </div>
+      <div class="card">
+        <b>Insurance Certificate</b><p class="muted small">Upload a photo or PDF</p>
+        <input type="file" id="doc-insurance" accept="image/*,.pdf" style="margin-top:8px">
+      </div>
+      <div class="card">
+        <b>ASE Certification</b><p class="muted small">Optional — builds trust with customers</p>
+        <input type="file" id="doc-ase" accept="image/*,.pdf" style="margin-top:8px">
+      </div>
+      <div class="card">
+        <b>Photos of Your Shop</b><p class="muted small">Upload at least 3 photos</p>
+        <input type="file" id="doc-photos" accept="image/*" multiple style="margin-top:8px">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" data-next="2">Back</button>
+        <button class="btn" data-next="4">Next</button>
+      </div>
+    </div>
+
+    <div class="step" data-step="4">
+      <h2>Review &amp; Submit</h2>
+      <div class="card" id="summary"></div>
+      <button class="btn" id="finish">Submit for Verification</button>
+      <p class="hint center">You can start browsing repair requests right away.</p>
+      <button class="btn btn-ghost" data-next="3">Back</button>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const SERVICES = ['Brakes','Engine Repair','Transmission','Electrical','AC/Heat','Tires','Suspension','Oil/Fluids','Diagnostics','Other'];
+const picked = new Set();
+
+$('services').innerHTML = SERVICES.map(s =>
+  `<div class="choice" data-s="${s}"><span class="ico">🔧</span>${s}<span class="check-box">✓</span></div>`).join('');
+document.querySelectorAll('#services .choice').forEach(c => c.onclick = () => {
+  c.classList.toggle('picked');
+  c.classList.contains('picked') ? picked.add(c.dataset.s) : picked.delete(c.dataset.s);
+});
+
+function renderSteps(n) {
+  $('steps').innerHTML = [1,2,3,4].map(i =>
+    `<div class="step-dot ${i < n ? 'done' : i === n ? 'now' : ''}">${i < n ? '✓' : i}</div>${i < 4 ? '<div class="step-line"></div>' : ''}`
+  ).join('');
+}
+function go(n) {
+  clearErr();
+  if (n === 2 && (!$('shop_name').value.trim() || !$('phone').value.trim() || !$('zip').value.trim()))
+    return showErr('Shop name, phone and ZIP are required.');
+  if (n === 3 && picked.size === 0) return showErr('Pick at least one service your shop offers.');
+  if (n === 4) {
+    $('summary').innerHTML = `
+      <div class="kv"><span class="k">🏢 Shop</span><span class="v">${esc($('shop_name').value)}</span></div>
+      <div class="kv"><span class="k">📞 Phone</span><span class="v">${esc($('phone').value)}</span></div>
+      <div class="kv"><span class="k">📍 Address</span><span class="v">${esc($('address').value)} ${esc($('zip').value)}</span></div>
+      <div class="kv"><span class="k">📏 Radius</span><span class="v">${esc($('radius').value)} miles</span></div>
+      <div class="kv"><span class="k">🔧 Services</span><span class="v">${[...picked].join(', ')}</span></div>`;
+  }
+  document.querySelectorAll('.step').forEach(s => s.classList.toggle('on', +s.dataset.step === n));
+  renderSteps(n);
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[data-next]').forEach(b => b.onclick = () => go(+b.dataset.next));
+
+async function uploadDocs() {
+  const jobs = [
+    ['doc-license', 'Business License'], ['doc-insurance', 'Insurance Certificate'],
+    ['doc-ase', 'ASE Certification'], ['doc-photos', 'Shop Photo']
+  ];
+  for (const [id, type] of jobs) {
+    const input = $(id);
+    if (input && input.files.length) {
+      const fd = new FormData();
+      fd.append('doc_type', type);
+      for (const f of input.files) fd.append('docs', f);
+      await api('/api/shop/docs', { method: 'POST', body: fd });
+    }
+  }
+}
+
+$('finish').onclick = async () => {
+  clearErr();
+  try {
+    await uploadDocs();
+    await api('/api/shop/profile', { method: 'POST', body: {
+      shop_name: $('shop_name').value.trim(),
+      phone: $('phone').value.trim(),
+      address: $('address').value.trim(),
+      zip: $('zip').value.trim(),
+      service_radius_mi: +$('radius').value,
+      services: [...picked]
+    }});
+    location.href = '/shop/dashboard.html';
+  } catch (e) { showErr(e.message); }
+};
+
+(async () => {
+  const me = await guard('shop');
+  if (!me) return;
+  if (me.name) $('shop_name').value = me.name;
+  if (me.phone) $('phone').value = me.phone;
+  go(1);
+})();
+</script>
+</body>
+</html>

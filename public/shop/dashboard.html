@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shop Dashboard — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <span></span>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <a class="icon-btn" href="/shop/requests.html">🔔</a>
+  </div>
+  <div class="wrap">
+    <div class="card">
+      <div class="row">
+        <div class="avatar">🔧</div>
+        <div class="grow">
+          <b id="shopname" style="font-size:18px"></b>
+          <span id="vbadge"></span><br>
+          <span class="muted small" id="shoploc"></span><br>
+          <span class="stars" id="shoprating"></span>
+        </div>
+      </div>
+      <div class="stat3">
+        <div class="stat"><div class="n" id="st-req">0</div><div class="l">Active Requests</div></div>
+        <div class="stat"><div class="n" id="st-bids">0</div><div class="l">Bids Submitted</div></div>
+        <div class="stat"><div class="n" id="st-won">0</div><div class="l">Customers Won</div></div>
+      </div>
+      <div class="stat3">
+        <div class="stat"><div class="n" id="st-held">$0</div><div class="l">In Escrow</div></div>
+        <div class="stat"><div class="n" id="st-earned">$0</div><div class="l">Lifetime Earnings</div></div>
+        <div class="stat"><div class="n" id="st-fee">$25</div><div class="l">Platform Fee</div></div>
+      </div>
+      <div id="fees"></div>
+    </div>
+
+    <h3>Recent Activity</h3>
+    <div id="activity"></div>
+
+    <a class="btn" href="/shop/requests.html">Browse Repair Requests</a>
+    <a class="logout" id="logout">Log out</a>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  const me = await guard('shop');
+  if (!me) return;
+  bottomNav('shop', 'dashboard.html');
+  const d = await api('/api/shop/dashboard');
+  $('shopname').textContent = d.shop.shop_name;
+  $('vbadge').innerHTML = d.shop.verified ? ' <span class="verified">✓ Verified</span>' : ' <span class="tag">Pending verification</span>';
+  $('shoploc').textContent = `${d.shop.zip || ''} · ${d.shop.service_radius_mi || 15} mi service radius`;
+  $('shoprating').textContent = `★ ${Number(d.shop.rating).toFixed(1)} (${d.shop.review_count} reviews)`;
+  $('st-req').textContent = d.stats.activeRequests;
+  $('st-bids').textContent = d.stats.bidsSubmitted;
+  $('st-won').textContent = d.stats.customersWon;
+  $('st-held').textContent = money(d.stats.escrowHeld);
+  $('st-earned').textContent = money(d.stats.lifetimeEarnings);
+  $('st-fee').textContent = money(d.platformFee || 0);
+  if (d.stats.feesOwed > 0) {
+    $('fees').innerHTML = `<div class="divider"></div>
+      <div class="kv"><span class="k">💰 Acquisition fees owed</span><span class="v gold">${money(d.stats.feesOwed)}</span></div>
+      <p class="hint">$25 per customer won — payment collection coming soon.</p>`;
+  }
+  $('activity').innerHTML = d.activity.length ? d.activity.map(a => `
+    <div class="card"><div class="row">
+      <span style="font-size:22px">${a.kind === 'won' ? '🏆' : '🔧'}</span>
+      <div class="grow"><b class="small">${esc(a.text)}</b><br><span class="muted small">${timeAgo(a.at)}</span></div>
+      <b class="gold small">${esc(a.extra || '')}</b>
+    </div></div>`).join('')
+    : '<div class="card center"><p class="sub">No activity yet — browse requests and submit your first bid.</p></div>';
+  $('logout').onclick = logout;
+})();
+</script>
+</body>
+</html>

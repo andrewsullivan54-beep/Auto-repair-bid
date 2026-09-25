@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your Bids — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/customer/requests.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <div id="view-list">
+      <h1 id="reqtitle">Your Bids</h1>
+      <p class="sub" id="reqsub"></p>
+      <div class="tabs" id="tabs">
+        <div class="tab on" data-sort="value">Best Value</div>
+        <div class="tab" data-sort="price">Lowest Price</div>
+        <div class="tab" data-sort="fast">Fastest</div>
+      </div>
+      <div class="err" id="err"></div>
+      <div id="bids"></div>
+    </div>
+    <div id="view-done" style="display:none">
+      <div class="big-check">✓</div>
+      <h1 class="center">You've Selected<br><span id="shopname"></span>!</h1>
+      <p class="sub center">Your repair request has been sent to the shop. They'll contact you shortly to schedule your appointment.</p>
+      <div class="card" id="contact"></div>
+      <div id="escrow"></div>
+      <div id="timeline"></div>
+      <a class="btn" href="/customer/requests.html">View My Requests</a>
+      <a class="btn btn-ghost" href="/customer/home.html">Back to Home</a>
+    </div>
+  </div>
+</div>
+
+<!-- Post-payment tow upsell popup -->
+<div class="overlay" id="towpop">
+  <div class="sheet">
+    <div class="tow-ico">🛻</div>
+    <h2>Need a tow?</h2>
+    <p class="sub center">Get your vehicle to the shop — our tow partner picks it up and delivers it.</p>
+    <button class="btn" id="towyes">Request a Tow</button>
+    <button class="btn btn-ghost" id="towno">No Thanks</button>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let data, sort = 'value';
+
+function score(b) { // best value: high rating, low price
+  return (b.rating || 5) * 100 - b.total;
+}
+function sorted() {
+  const arr = [...data.bids];
+  if (sort === 'price') arr.sort((a, b) => a.total - b.total);
+  else if (sort === 'fast') arr.sort((a, b) => String(a.preferred_date).localeCompare(String(b.preferred_date)));
+  else arr.sort((a, b) => score(b) - score(a));
+  return arr;
+}
+
+function render() {
+  const r = data;
+  document.getElementById('reqtitle').textContent = `${r.year} ${r.make} ${r.model}`;
+  document.getElementById('reqsub').textContent = `${r.issue_category}${r.issue_detail ? ' (' + r.issue_detail + ')' : ''} · ${r.zip}`;
+  // If the job is already booked, offer a shortcut to payment / job status
+  const won = r.bids.find(b => b.status === 'won');
+  let top = '';
+  if (won && r.status !== 'open') {
+    const e = r.escrow || {};
+    const state = e.payment_status === 'released' ? `✓ Completed — ${money(e.shopPayout)} released`
+      : e.payment_status === 'held' ? `💰 ${money(e.amountHeld)} held in escrow`
+      : 'Payment pending';
+    top = `<div class="card"><div class="row"><div class="grow"><b>Booked with ${esc(won.shop_name)}</b><br>
+      <span class="muted small">${state}</span></div>
+      <button class="btn" style="width:auto;margin:0" onclick="showDone()">Details ›</button></div></div>`;
+  }
+  const arr = sorted();
+  document.getElementById('bids').innerHTML = top + (arr.length ? arr.map((b, i) => `
+    <div class="card bid-card">
+      <div class="bid-top">
+        <div class="avatar">🔧</div>
+        <div class="grow">
+          <b>${esc(b.shop_name)}</b> ${b.verified ? '<span class="verified">✓ Verified</span>' : ''}<br>
+          <span class="stars">${stars(b.rating)} (${b.review_count})</span><br>
+          <span class="muted small">${esc(b.warranty || 'Ask about warranty')}</span><br>
+          <span class="muted small">${b.preferred_date ? 'Available ' + esc(b.preferred_date) : ''}</span>
+        </div>
+        <div class="price">${money(b.total)}</div>
+      </div>
+      ${i === 0 && sort === 'value' ? '<span class="tag">★ Best Value</span>' : ''}
+      <div class="divider"></div>
+      <div class="kv"><span class="k">Parts</span><span class="v">${money(b.parts_cost)}</span></div>
+      <div class="kv"><span class="k">Labor</span><span class="v">${money(b.labor_cost)}</span></div>
+      ${b.other_cost ? `<div class="kv"><span class="k">Other</span><span class="v">${money(b.other_cost)}</span></div>` : ''}
+      ${r.status === 'open'
+        ? `<button class="btn" data-bid="${b.id}">Choose This Shop</button>`
+        : b.status === 'won'
+          ? `<div class="center" style="margin-top:10px"><span class="tag green">✓ Selected</span></div>`
+          : ''}
+    </div>`).join('')
+    : '<div class="card center"><p class="sub">No bids yet — shops near you are being notified. Check back soon.</p></div>');
+}
+
+// Show the "you've selected" screen for the winning bid (fresh or returning visit)
+function showDone() {
+  const won = data.bids.find(b => b.status === 'won');
+  if (!won) return;
+  document.getElementById('view-list').style.display = 'none';
+  document.getElementById('view-done').style.display = 'block';
+  document.getElementById('shopname').textContent = won.shop_name;
+  document.getElementById('contact').innerHTML = `
+    <div class="kv"><span class="k">📞 Shop Contact</span><span class="v">${esc(won.phone || 'See shop profile')}</span></div>
+    <div class="kv"><span class="k">📍 Address</span><span class="v">${esc(won.address || '')}</span></div>
+    <div class="kv"><span class="k">⭐ Rating</span><span class="v">${stars(won.rating)} (${won.review_count} reviews)</span></div>`;
+  renderEscrow();
+  window.scrollTo(0, 0);
+}
+
+async function renderEscrow() {
+  data = await api('/api/requests/' + id); // refresh
+  const r = data, e = r.escrow || {};
+  const won = r.bids.find(b => b.status === 'won');
+  const autoHrs = data.autoReleaseHours || 72;
+  const box = $('escrow');
+  let html = '<div class="card"><h3 style="margin-top:0">💰 Payment</h3>';
+  if (e.payment_status === 'unpaid' || !e.payment_status) {
+    const total = won ? won.total : 0;
+    html += `<h3>📋 Book &amp; Pay — review first</h3>
+      <div class="kv"><span class="k">Shop</span><span class="v">${esc(won ? won.shop_name : '')}</span></div>
+      <div class="kv"><span class="k">Parts</span><span class="v">${money(won ? won.parts_cost : 0)}</span></div>
+      <div class="kv"><span class="k">Labor</span><span class="v">${money(won ? won.labor_cost : 0)}</span></div>
+      ${won && won.other_cost ? `<div class="kv"><span class="k">Other</span><span class="v">${money(won.other_cost)}</span></div>` : ''}
+      <div class="kv"><span class="k"><b>Total due today</b></span><span class="v gold" style="font-size:20px">${money(total)}</span></div>
+      <div class="kv"><span class="k">Warranty</span><span class="v">${esc(won ? won.warranty || 'Ask shop' : '')}</span></div>
+      <div class="divider"></div>
+      <p class="sub"><b>Terms (${esc(data.termsVersion || '')}):</b> your ${money(total)} is held securely by Auto Repair Bids — it is <b>not</b> sent to the shop yet.
+      It is released to the shop only after <b>both</b> you and the shop confirm the work is done in the app.
+      Requesting and comparing bids never created a payment obligation — this is the first and only charge for the agreed work.
+      <span class="muted">Final cancellation &amp; refund terms are still being finalized.</span></p>
+      <label style="display:flex;gap:10px;align-items:flex-start;margin-top:10px;cursor:pointer">
+        <input type="checkbox" id="agree" style="width:22px;height:22px;margin-top:2px;accent-color:#f5b301">
+        <span class="sub">I agree to the terms above and authorize this payment.</span>
+      </label>
+      <button class="btn" id="paybtn" disabled style="opacity:.4">Pay ${money(total)} &amp; Book</button>
+      <p class="hint center">Simulated payment for now — no real money moves.</p>`;
+  } else if (e.payment_status === 'held') {
+    html += `<p><span class="tag blue">✓ ${money(e.amountHeld)} held in escrow</span></p>
+      <div class="kv"><span class="k">Your payment (held)</span><span class="v">${money(e.amountHeld)}</span></div>
+      <div class="kv"><span class="k">Shop gets on completion</span><span class="v">${money(e.shopPayout)}</span></div>
+      <p class="hint">Released to the shop only when you both confirm the work is done.</p>`;
+    if (r.shop_confirmed_done && !r.customer_confirmed_done && r.status === 'assigned') {
+      const hrsLeft = autoCountdown(r.completed_at, autoHrs);
+      html += `<p class="sub"><b>🔧 The shop marked this repair completed.</b> Confirm it looks right, or report a problem.</p>
+        <div class="btn-row">
+          <button class="btn" id="confirmbtn">Confirm Completion</button>
+          <button class="btn btn-ghost" id="reportbtn">Report a Problem</button>
+        </div>
+        ${hrsLeft !== null ? `<p class="hint center">If you don't respond, the payout auto-releases in about ${hrsLeft}.</p>` : ''}`;
+    } else if (r.customer_confirmed_done && !r.shop_confirmed_done) {
+      html += `<p class="hint center">You confirmed — waiting on the shop to mark it complete.</p>`;
+    } else if (!r.shop_confirmed_done && r.status === 'assigned') {
+      html += `<p class="hint center">Waiting on the shop to mark the work complete.</p>`;
+    }
+  } else if (e.payment_status === 'released') {
+    html += `<p><span class="tag green">✓ Completed — ${money(e.shopPayout)} released to the shop</span></p>
+      <div class="kv"><span class="k">Platform fee</span><span class="v">${money(e.platformFee)}</span></div>`
+      + (e.autoReleased ? `<p class="hint">Auto-released after ${autoHrs}h with no customer response.</p>` : '');
+  } else if (e.payment_status === 'refunded') {
+    html += `<p><span class="tag blue">↩ Refunded — ${money(r.refunded_amount || 0)} back to you</span></p>
+      <p class="hint center">Simulated refund — no real money moved.</p>`;
+  }
+  // Job-level states beyond payment
+  if (r.status === 'disputed') {
+    html += `<div class="divider"></div><p><span class="tag red">⚠️ Under dispute — payout held</span></p>
+      <p class="sub">You reported: “${esc(r.dispute_reason || '')}”. The payout stays held while this is reviewed. Resolution process is still being finalized.</p>`;
+  } else if (r.status === 'cancelled_customer' || r.status === 'cancelled_shop') {
+    html += `<div class="divider"></div><p><span class="tag">✕ Booking cancelled${r.status === 'cancelled_shop' ? ' by the shop' : ' by you'}</span></p>`;
+  } else if (r.status === 'no_show') {
+    html += `<div class="divider"></div><p><span class="tag">🚫 Marked as no-show by the shop</span></p>
+      <p class="hint">Payout held — no-show refund/compensation policy is still being finalized.</p>`;
+  }
+  // Cancel while the booking is still active
+  if (r.status === 'assigned' && (e.payment_status === 'unpaid' || e.payment_status === 'held')) {
+    html += `<div class="divider"></div><button class="btn btn-ghost" id="cancelbtn">Cancel Booking</button>`;
+  }
+  html += '</div>';
+  // Tow status on the job (if one was requested)
+  const t = r.tow;
+  if (t) {
+    const ttag = t.status === 'completed' ? '<span class="tag green">✓ Tow completed</span>'
+      : t.status === 'accepted' ? '<span class="tag blue">🛻 Tow accepted — driver on the way</span>'
+      : t.status === 'cancelled' ? '<span class="tag">✕ Tow cancelled</span>'
+      : t.status === 'unassigned' ? '<span class="tag red">⚠️ Tow needs attention</span>'
+      : '<span class="tag blue">🛻 Finding an available tow partner…</span>';
+    const tpartner = t.partner_name
+      ? esc(t.partner_name) + (t.partner_phone ? ' · ' + esc(t.partner_phone) : '')
+      : (t.status === 'requested' ? 'Finding a tow partner…' : '—');
+    html += `<div class="card"><h3 style="margin-top:0">🛻 Tow</h3>
+      <p>${ttag}</p>
+      <div class="kv"><span class="k">Partner</span><span class="v">${tpartner}</span></div>
+      <div class="kv"><span class="k">Pickup</span><span class="v">${esc(t.pickup)}</span></div>
+      <div class="kv"><span class="k">Dropoff</span><span class="v">${esc(t.dropoff)}</span></div>
+      <a class="btn btn-ghost" href="/customer/tow.html?tow_id=${t.id}">View Tow</a></div>`;
+  }
+  // Add-on charges proposed by the shop
+  if (r.addons && r.addons.length) {
+    html += '<div class="card"><h3 style="margin-top:0">➕ Extra Work</h3><p class="hint">The shop proposed extra work below — nothing is ever added to your bill without your explicit approval here.</p>' + r.addons.map(a => `
+      <div class="kv"><span class="k">${esc(a.description)}</span><span class="v">${money(a.amount)}</span></div>
+      ${a.status === 'proposed' ? `<div class="btn-row">
+          <button class="btn" onclick="addonPay(${a.id})">Approve &amp; Pay</button>
+          <button class="btn btn-ghost" onclick="addonReject(${a.id})">Decline</button>
+        </div><p class="hint">Paid in-app — joins your escrow hold; the flat $25 platform fee still applies only once per job.</p>`
+        : `<p class="small ${a.status === 'paid' ? 'gold' : 'muted'}">${a.status === 'paid' ? '✓ Paid — added to escrow hold' : 'Declined'}</p>`}
+    `).join('') + '</div>';
+  }
+  box.innerHTML = html;
+  const agree = $('agree'), paybtn = $('paybtn');
+  if (agree && paybtn) agree.onchange = () => {
+    paybtn.disabled = !agree.checked;
+    paybtn.style.opacity = agree.checked ? 1 : .4;
+  };
+  if (paybtn) paybtn.onclick = async () => {
+    clearErr();
+    try {
+      await api(`/api/requests/${id}/pay`, { method: 'POST' });
+      renderEscrow();
+      maybeTowUpsell(); // post-payment tow popup (once per job)
+    } catch (err) { showErr(err.message); }
+  };
+  const confirmbtn = $('confirmbtn');
+  if (confirmbtn) confirmbtn.onclick = async () => {
+    clearErr();
+    try {
+      const res = await api(`/api/requests/${id}/customer-confirm`, { method: 'POST' });
+      if (res.released) alert(`All done! ${money(res.shopPayout)} released to the shop.`);
+      renderEscrow();
+    } catch (err) { showErr(err.message); }
+  };
+  const reportbtn = $('reportbtn');
+  if (reportbtn) reportbtn.onclick = async () => {
+    clearErr();
+    const reason = prompt('What went wrong with the repair?');
+    if (!reason || !reason.trim()) return;
+    try {
+      await api(`/api/requests/${id}/report-problem`, { method: 'POST', body: { reason: reason.trim() } });
+      alert('Reported. The payout is held while the problem is reviewed.');
+      renderEscrow();
+    } catch (err) { showErr(err.message); }
+  };
+  const cancelbtn = $('cancelbtn');
+  if (cancelbtn) cancelbtn.onclick = async () => {
+    clearErr();
+    const held = data.escrow && data.escrow.payment_status === 'held';
+    if (!confirm(held
+      ? 'Cancel this booking? Your held payment will be fully refunded (simulated).'
+      : 'Cancel this booking? Nothing has been paid.')) return;
+    try {
+      const res = await api(`/api/requests/${id}/cancel`, { method: 'POST' });
+      alert(res.refunded ? 'Booking cancelled — refund issued (simulated).' : 'Booking cancelled.');
+      renderEscrow();
+    } catch (err) { showErr(err.message); }
+  };
+  renderTimeline(id);
+}
+
+async function addonPay(aid) {
+  clearErr();
+  try { await api(`/api/addons/${aid}/approve-pay`, { method: 'POST' }); renderEscrow(); }
+  catch (e) { showErr(e.message); }
+}
+async function addonReject(aid) {
+  clearErr();
+  try { await api(`/api/addons/${aid}/reject`, { method: 'POST' }); renderEscrow(); }
+  catch (e) { showErr(e.message); }
+}
+
+async function choose(bidId) {
+  clearErr();
+  const b = (data.bids || []).find(x => x.id === bidId);
+  if (!confirm(`Choose ${b ? b.shop_name : 'this shop'} for this job?`)) return;
+  try {
+    await api(`/api/requests/${id}/select`, { method: 'POST', body: { bid_id: bidId } });
+    data = await api('/api/requests/' + id);
+    showDone();
+  } catch (e) { showErr(e.message); }
+}
+
+// Delegate bid-card button clicks (avoids inline quoting issues with shop names)
+document.getElementById('bids').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-bid]');
+  if (btn) choose(+btn.dataset.bid);
+});
+
+document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('on'));
+  t.classList.add('on');
+  sort = t.dataset.sort;
+  render();
+});
+
+// Post-payment tow upsell: show once per job, never blocks anything
+function maybeTowUpsell() {
+  const key = 'towUpsell:' + id;
+  if (sessionStorage.getItem(key)) return;
+  if (data && data.tow) return; // already has a tow
+  sessionStorage.setItem(key, '1');
+  const pop = $('towpop');
+  pop.classList.add('show');
+  $('towyes').onclick = () => { location.href = '/customer/tow.html?request_id=' + id; };
+  $('towno').onclick = () => pop.classList.remove('show');
+}
+
+(async () => {
+  const me = await guard('customer');
+  if (!me || !id) return location.href = '/customer/requests.html';
+  bottomNav('customer', 'requests.html');
+  data = await api('/api/requests/' + id);
+  render();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Requests — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/customer/home.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1>My Requests</h1>
+    <div id="list"></div>
+    <a class="btn" href="/customer/new-request.html">+ New Repair Request</a>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  const me = await guard('customer');
+  if (!me) return;
+  bottomNav('customer', 'requests.html');
+  const rows = await api('/api/requests/mine');
+  const list = document.getElementById('list');
+  if (!rows.length) {
+    list.innerHTML = '<div class="card center"><p class="sub">No requests yet. Post your first one and watch the bids roll in.</p></div>';
+    return;
+  }
+  const statusOf = r =>
+    r.status === 'open' ? '<span class="small gold">● Open</span>'
+    : r.payment_status === 'released' ? '<span class="small" style="color:var(--green)">✓ Completed</span>'
+    : r.payment_status === 'held' ? '<span class="small gold">💰 Paid — in escrow</span>'
+    : '<span class="small gold">✓ Assigned — pay to book</span>';
+  const towOf = r =>
+    !r.tow_status ? ''
+    : r.tow_status === 'completed' ? '<br><span class="small" style="color:var(--green)">🛻 Tow completed</span>'
+    : r.tow_status === 'cancelled' ? ''
+    : r.tow_status === 'unassigned' ? '<br><span class="small" style="color:#f5a3a7">⚠️ Tow needs attention</span>'
+    : r.tow_status === 'requested' ? '<br><span class="small gold">🛻 Finding a tow partner…</span>'
+    : `<br><span class="small gold">🛻 Tow: ${esc(r.tow_status)}</span>`;
+  list.innerHTML = rows.map(r => `
+    <a class="card tappable" href="/customer/bids.html?id=${r.id}">
+      <div class="row">
+        <div class="avatar">🚗</div>
+        <div class="grow">
+          <b>${esc(r.year)} ${esc(r.make)} ${esc(r.model)}</b><br>
+          <span class="muted small">${esc(r.issue_category)}${r.issue_detail ? ' (' + esc(r.issue_detail) + ')' : ''}</span><br>
+          ${statusOf(r)}${towOf(r)}
+          <span class="muted small"> · ${timeAgo(r.created_at)}</span>
+        </div>
+        <div style="text-align:right">
+          <div class="price" style="font-size:18px">${r.bid_count} bid${r.bid_count === 1 ? '' : 's'}</div>
+          <span class="gold">›</span>
+        </div>
+      </div>
+    </a>`).join('');
+})();
+</script>
+</body>
+</html>

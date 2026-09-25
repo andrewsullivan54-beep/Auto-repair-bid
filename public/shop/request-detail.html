@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request Details — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/shop/requests.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1 id="title">Request Details</h1>
+    <div class="err" id="err"></div>
+    <div class="card">
+      <div class="kv"><span class="k">🚗 Vehicle</span><span class="v" id="v-vehicle"></span></div>
+      <div class="kv"><span class="k">🔧 Issue</span><span class="v" id="v-issue"></span></div>
+      <div class="kv"><span class="k">📍 Distance</span><span class="v" id="v-dist"></span></div>
+      <div class="kv"><span class="k">🕐 Posted</span><span class="v" id="v-age"></span></div>
+    </div>
+
+    <div class="card">
+      <b>Customer Information</b>
+      <p class="sub" id="v-customer" style="margin-top:6px"></p>
+    </div>
+
+    <div class="card">
+      <b>Additional Details</b>
+      <p class="sub" id="v-desc" style="margin-top:6px"></p>
+      <div class="photo-grid" id="v-photos" style="margin-top:10px"></div>
+    </div>
+
+    <div class="card" id="bidcard">
+      <h3 style="margin-top:0">Submit Your Bid</h3>
+      <label>Parts Cost</label>
+      <input type="number" id="parts" min="0" step="1" placeholder="220" inputmode="decimal">
+      <label>Labor Cost</label>
+      <input type="number" id="labor" min="0" step="1" placeholder="180" inputmode="decimal">
+      <label>Other (supplies, tax, etc.)</label>
+      <input type="number" id="other" min="0" step="1" placeholder="25" inputmode="decimal">
+      <div class="kv" style="margin-top:10px"><span class="k"><b>Total Price</b></span><span class="v gold" id="total" style="font-size:22px">$0</span></div>
+      <label>Preferred Date</label>
+      <input type="text" id="pdate" placeholder="Thursday, Apr 24">
+      <label>Warranty</label>
+      <select id="warranty">
+        <option>24 months / 24,000 miles</option>
+        <option>12 months / 12,000 miles</option>
+        <option>6 months / 6,000 miles</option>
+        <option>90 days</option>
+        <option>No warranty</option>
+      </select>
+      <button class="btn" id="sendbid">Submit Bid</button>
+      <p class="hint center">No charge to bid. You only pay the $25 acquisition fee if the customer picks you.</p>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const id = new URLSearchParams(location.search).get('id');
+
+function recalc() {
+  const t = (+$('parts').value || 0) + (+$('labor').value || 0) + (+$('other').value || 0);
+  $('total').textContent = money(t);
+}
+['parts', 'labor', 'other'].forEach(i => $(i).oninput = recalc);
+
+$('sendbid').onclick = async () => {
+  clearErr();
+  try {
+    const r = await api(`/api/requests/${id}/bids`, { method: 'POST', body: {
+      parts_cost: +$('parts').value || 0,
+      labor_cost: +$('labor').value || 0,
+      other_cost: +$('other').value || 0,
+      preferred_date: $('pdate').value.trim(),
+      warranty: $('warranty').value
+    }});
+    alert(`Bid submitted — ${money(r.total)}. Good luck!`);
+    location.href = '/shop/bids.html';
+  } catch (e) { showErr(e.message); }
+};
+
+(async () => {
+  const me = await guard('shop');
+  if (!me || !id) return location.href = '/shop/requests.html';
+  bottomNav('shop', 'requests.html');
+  const r = await api('/api/requests/' + id);
+  $('title').textContent = `${r.year} ${r.make} ${r.model}`;
+  $('v-vehicle').textContent = `${r.year} ${r.make} ${r.model}${r.mileage ? ' · ' + r.mileage + ' mi' : ''}`;
+  $('v-issue').textContent = r.issue_category + (r.issue_detail ? ` (${r.issue_detail})` : '');
+  $('v-dist').textContent = 'Nearby';
+  $('v-age').textContent = timeAgo(r.created_at);
+  $('v-customer').innerHTML = r.customer
+    ? `👤 ${esc(r.customer.name)}<br>📞 ${esc(r.customer.phone || '—')}<br>✉️ ${esc(r.customer.email)}`
+    : '🔒 Available after you submit a bid — you\'ll get their contact info if selected.';
+  $('v-desc').textContent = r.description || 'No additional details provided.';
+  $('v-photos').innerHTML = r.photos.map(p =>
+    `<a href="${esc(p.file_path)}" target="_blank"><img src="${esc(p.file_path)}"></a>`).join('');
+  recalc();
+})();
+</script>
+</body>
+</html>

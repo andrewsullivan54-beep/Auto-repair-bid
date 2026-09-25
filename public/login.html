@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Log In — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1 class="center">Welcome Back</h1>
+    <p class="sub center">Log in to your account.</p>
+    <div class="err" id="err"></div>
+    <label>Email</label>
+    <input type="email" id="email" placeholder="you@example.com" autocomplete="email">
+    <label>Password</label>
+    <input type="password" id="password" placeholder="Your password" autocomplete="current-password">
+    <button class="btn" id="go">Log In</button>
+    <p class="sub center" style="margin-top:14px">New here? <a href="/" class="gold">Create an account</a></p>
+    <div class="card">
+      <p class="small muted"><b class="gold">Demo logins</b> (password: <b>password123</b>)</p>
+      <p class="small" style="margin-top:6px">Customer: customer@example.com</p>
+      <p class="small">Shop: shop1@example.com <span class="muted">(Riverside Auto Care)</span></p>
+      <p class="small">Tow: tow1@example.com <span class="muted">(Tri-State Tow &amp; Recovery)</span></p>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+document.getElementById('go').onclick = async () => {
+  clearErr();
+  try {
+    const r = await api('/api/login', { method: 'POST', body: {
+      email: document.getElementById('email').value,
+      password: document.getElementById('password').value
+    }});
+    location.href = r.role === 'shop' ? '/shop/dashboard.html'
+      : r.role === 'tow' ? '/tow/partner.html'
+      : '/customer/home.html';
+  } catch (e) { showErr(e.message); }
+};
+</script>
+</body>
+</html>

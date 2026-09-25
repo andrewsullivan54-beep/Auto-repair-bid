@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Request a Tow — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/customer/home.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1>🛻 Request a Tow</h1>
+    <p class="sub" id="lede">Our tow partner picks up your vehicle and delivers it where it needs to go.</p>
+    <div class="err" id="err"></div>
+
+    <div id="formview">
+      <label>Pickup location</label>
+      <input type="text" id="pickup" placeholder="Street address or ZIP" autocomplete="off">
+      <label>Dropoff location</label>
+      <input type="text" id="dropoff" placeholder="Shop name or address" autocomplete="off">
+      <label>Vehicle</label>
+      <div class="btn-row">
+        <input type="text" id="year" placeholder="Year" inputmode="numeric" style="width:32%">
+        <input type="text" id="make" placeholder="Make" style="width:34%">
+        <input type="text" id="model" placeholder="Model" style="width:34%">
+      </div>
+      <label>When do you need it?</label>
+      <select id="window">
+        <option value="ASAP">ASAP</option>
+        <option value="Today">Today</option>
+        <option value="Tomorrow morning">Tomorrow morning</option>
+        <option value="Tomorrow afternoon">Tomorrow afternoon</option>
+      </select>
+      <label>Notes for the driver (optional)</label>
+      <textarea id="notes" rows="3" maxlength="300" placeholder="Gate code, parking spot, vehicle condition…"></textarea>
+      <button class="btn" id="submit">Request Tow</button>
+      <p class="hint center">The tow partner confirms the price with you directly — no payment is taken here.</p>
+    </div>
+
+    <div id="statusview" style="display:none">
+      <div class="card">
+        <h3 style="margin-top:0">🛻 Tow <span id="tstatus"></span></h3>
+        <div class="kv"><span class="k">Partner</span><span class="v" id="tpartner"></span></div>
+        <div class="kv"><span class="k">Pickup</span><span class="v" id="tpickup"></span></div>
+        <div class="kv"><span class="k">Dropoff</span><span class="v" id="tdropoff"></span></div>
+        <div class="kv"><span class="k">Vehicle</span><span class="v" id="tvehicle"></span></div>
+        <div class="kv"><span class="k">When</span><span class="v" id="twindow"></span></div>
+        <div id="tnoteswrap" style="display:none"><div class="kv"><span class="k">Notes</span><span class="v" id="tnotes"></span></div></div>
+        <p class="hint" id="thint"></p>
+      </div>
+      <button class="btn btn-ghost" id="cancelbtn" style="display:none">Cancel Tow</button>
+      <a class="btn btn-ghost" href="/customer/home.html">Back to Home</a>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const qs = new URLSearchParams(location.search);
+const requestId = qs.get('request_id');
+const towId = qs.get('tow_id');
+
+function statusTag(s) {
+  return s === 'completed' ? '<span class="tag green">✓ Completed</span>'
+    : s === 'accepted' ? '<span class="tag blue">🛻 Accepted — driver on the way</span>'
+    : s === 'cancelled' ? '<span class="tag">✕ Cancelled</span>'
+    : s === 'unassigned' ? '<span class="tag red">⚠️ Needs attention</span>'
+    : '<span class="tag blue">🛻 Finding an available tow partner…</span>';
+}
+
+function showStatus(t) {
+  $('formview').style.display = 'none';
+  $('statusview').style.display = 'block';
+  $('tstatus').innerHTML = statusTag(t.status);
+  $('tpartner').textContent = (t.partner_name || (t.status === 'requested' ? 'Assigning…' : '—'))
+    + (t.partner_phone ? ' · ' + t.partner_phone : '');
+  $('tpickup').textContent = t.pickup;
+  $('tdropoff').textContent = t.dropoff;
+  $('tvehicle').textContent = [t.year, t.make, t.model].filter(Boolean).join(' ') || '—';
+  $('twindow').textContent = t.preferred_window || '—';
+  if (t.notes) { $('tnoteswrap').style.display = 'block'; $('tnotes').textContent = t.notes; }
+  $('thint').textContent = t.status === 'requested'
+    ? (t.offers_pending
+      ? 'We\'re offering your tow to nearby partners — you\'ll see the driver details as soon as one accepts.'
+      : 'Your request is in — we\'re lining up a tow partner now.')
+    : t.status === 'accepted'
+    ? 'The driver is on the way. They\'ll call you when they arrive.'
+    : t.status === 'completed'
+    ? 'Tow completed.'
+    : t.status === 'unassigned'
+    ? 'All nearby partners are busy — we\'re on it and will call you shortly.'
+    : 'This tow was cancelled.';
+  const cb = $('cancelbtn');
+  if (t.status === 'requested' || t.status === 'accepted') {
+    cb.style.display = 'block';
+    cb.onclick = async () => {
+      if (!confirm('Cancel this tow request?')) return;
+      try { await api('/api/tow/' + t.id + '/cancel', { method: 'POST' }); location.reload(); }
+      catch (e) { showErr(e.message); }
+    };
+  }
+  window.scrollTo(0, 0);
+}
+
+(async () => {
+  const me = await guard('customer');
+  if (!me) return;
+  bottomNav('customer', 'home.html');
+
+  // Viewing an existing tow's status
+  if (towId) {
+    const mine = await api('/api/tow/mine');
+    const t = mine.find(x => x.id === +towId);
+    if (!t) { showErr('Tow not found.'); return; }
+    showStatus(t);
+    return;
+  }
+
+  // Prefill from a repair job (post-payment upsell)
+  if (requestId) {
+    try {
+      const r = await api('/api/requests/' + requestId);
+      $('pickup').value = r.zip || '';
+      $('year').value = r.year || '';
+      $('make').value = r.make || '';
+      $('model').value = r.model || '';
+      const won = (r.bids || []).find(b => b.status === 'won');
+      if (won) $('dropoff').value = [won.shop_name, won.address].filter(Boolean).join(' — ');
+      $('lede').textContent = `Get your ${[r.year, r.make, r.model].filter(Boolean).join(' ') || 'vehicle'} to ${won ? won.shop_name : 'the shop'}.`;
+    } catch (e) { /* fall through to blank form */ }
+  }
+
+  $('submit').onclick = async () => {
+    clearErr();
+    try {
+      const res = await api('/api/tow', {
+        method: 'POST',
+        body: {
+          pickup: $('pickup').value, dropoff: $('dropoff').value,
+          year: $('year').value, make: $('make').value, model: $('model').value,
+          preferred_window: $('window').value, notes: $('notes').value,
+          request_id: requestId || undefined
+        }
+      });
+      const mine = await api('/api/tow/mine');
+      showStatus(mine.find(x => x.id === res.id));
+    } catch (e) { showErr(e.message); }
+  };
+})();
+</script>
+</body>
+</html>

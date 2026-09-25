@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Available Requests — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/shop/dashboard.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1>Available Repair Requests</h1>
+    <div class="tabs" id="tabs">
+      <div class="tab on" data-tab="nearby">Nearby</div>
+      <div class="tab" data-tab="all">All</div>
+      <div class="tab" data-tab="myservices">My Services</div>
+    </div>
+    <div id="list"></div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let tab = 'nearby';
+async function load() {
+  const rows = await api('/api/shop/requests?tab=' + tab);
+  document.getElementById('list').innerHTML = rows.length ? rows.map(r => `
+    <div class="card">
+      <div class="row">
+        ${r.thumb ? `<img src="${esc(r.thumb)}" class="avatar" style="object-fit:cover">` : '<div class="avatar">🚗</div>'}
+        <div class="grow">
+          <b>${esc(r.year)} ${esc(r.make)} ${esc(r.model)}</b>
+          ${r.my_bid ? '<span class="tag blue">Bid submitted</span>' : '<span class="tag">New Request</span>'}<br>
+          <span class="muted small">${esc(r.issue_category)}${r.issue_detail ? ' (' + esc(r.issue_detail) + ')' : ''}</span><br>
+          <span class="muted small">📍 ${r.distance_mi} mi away · ${timeAgo(r.created_at)} · ${r.bid_count} bid${r.bid_count === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+      <a class="btn" href="/shop/request-detail.html?id=${r.id}">View Details</a>
+    </div>`).join('')
+    : '<div class="card center"><p class="sub">No open requests right now. Check back soon.</p></div>';
+}
+document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('on'));
+  t.classList.add('on');
+  tab = t.dataset.tab;
+  load();
+});
+(async () => { if (await guard('shop')) { bottomNav('shop', 'requests.html'); load(); } })();
+</script>
+</body>
+</html>

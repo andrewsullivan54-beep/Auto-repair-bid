@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>New Repair Request — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/customer/home.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <div class="steps" id="steps"></div>
+    <div class="err" id="err"></div>
+
+    <!-- STEP 1: vehicle -->
+    <div class="step" data-step="1">
+      <h2>Tell us about your vehicle</h2>
+      <label>Year</label>
+      <select id="year"></select>
+      <label>Make</label>
+      <input type="text" id="make" placeholder="Ford">
+      <label>Model</label>
+      <input type="text" id="model" placeholder="F-150">
+      <label>Mileage (optional)</label>
+      <input type="text" id="mileage" placeholder="82,000" inputmode="numeric">
+      <p class="hint">Your vehicle information helps us find the right shops for you.</p>
+      <button class="btn" data-next="2">Continue</button>
+    </div>
+
+    <!-- STEP 2: what's wrong -->
+    <div class="step" data-step="2">
+      <h2>What's going on with your vehicle?</h2>
+      <div class="choices" id="issues"></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" data-next="1">Back</button>
+        <button class="btn" data-next="3" id="to3" disabled style="opacity:.4">Continue</button>
+      </div>
+    </div>
+
+    <!-- STEP 3: details + photos -->
+    <div class="step" data-step="3">
+      <h2>Describe the problem</h2>
+      <textarea id="description" maxlength="500" placeholder="My truck makes a grinding noise when I brake."></textarea>
+      <p class="hint"><span id="dcount">0</span>/500</p>
+      <label>Issue detail (optional)</label>
+      <input type="text" id="issue_detail" placeholder="e.g. Grinding noise, worse when cold">
+      <h3>Add photos <span class="muted">(optional)</span></h3>
+      <div class="photo-grid" id="photogrid">
+        <label class="photo-add" for="photos"><span>+</span>Add photo</label>
+      </div>
+      <input type="file" id="photos" accept="image/*" multiple hidden>
+      <div class="btn-row">
+        <button class="btn btn-ghost" data-next="2">Back</button>
+        <button class="btn" data-next="4">Continue</button>
+      </div>
+    </div>
+
+    <!-- STEP 4: location -->
+    <div class="step" data-step="4">
+      <h2>Find shops near you</h2>
+      <label>Enter your ZIP code</label>
+      <input type="text" id="zip" placeholder="45202" inputmode="numeric" maxlength="10">
+      <label>Service radius</label>
+      <div id="radii">
+        <span class="pill" data-r="5">5 mi</span><span class="pill on" data-r="10">10 mi</span><span class="pill" data-r="25">25 mi</span><span class="pill" data-r="50">50 mi</span>
+      </div>
+      <div class="mapbox"><div style="font-size:30px">📍</div><div>Cincinnati</div><div class="small">Shops within <b class="gold" id="rmap">10 miles</b></div></div>
+      <div class="btn-row">
+        <button class="btn btn-ghost" data-next="3">Back</button>
+        <button class="btn" data-next="5">Continue</button>
+      </div>
+    </div>
+
+    <!-- STEP 5: review -->
+    <div class="step" data-step="5">
+      <h2>Review &amp; Submit</h2>
+      <div class="card" id="summary"></div>
+      <button class="btn" id="submit">Submit Request</button>
+      <p class="hint center">Local shops will be notified and start sending you bids.</p>
+      <button class="btn btn-ghost" data-next="4">Back</button>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+const ISSUES = [
+  ['Brakes','🛑'],['Engine','🔧'],['Transmission','⚙️'],['Tires','🛞'],
+  ['Battery','🔋'],['Electrical','⚡'],['AC/Heat','❄️'],['Suspension','🔩'],
+  ['Oil/Fluids','🛢️'],['Check Engine Light','🚨'],['Other','🧰'],
+  ["I don't know - need diagnostic",'🔍']
+];
+const state = { issue: null, radius: 10, photoFiles: [] };
+
+// Year dropdown: current year back to 1990
+(() => {
+  const y = new Date().getFullYear(), sel = $('year');
+  for (let i = y + 1; i >= 1990; i--) {
+    const o = document.createElement('option');
+    o.value = o.textContent = i;
+    if (i === 2020) o.selected = true;
+    sel.appendChild(o);
+  }
+})();
+
+// Preselect service from quick-service buttons / tow card
+const preset = new URLSearchParams(location.search).get('service');
+if (preset === 'tow') state.issue = 'Tow';
+
+// Step dots
+function renderSteps(n) {
+  $('steps').innerHTML = [1,2,3,4,5].map(i =>
+    `<div class="step-dot ${i < n ? 'done' : i === n ? 'now' : ''}">${i < n ? '✓' : i}</div>${i < 5 ? '<div class="step-line"></div>' : ''}`
+  ).join('');
+}
+function go(n) {
+  clearErr();
+  if (n === 2 && (!$('make').value.trim() || !$('model').value.trim())) return showErr('Enter your vehicle make and model.');
+  if (n === 3 && !state.issue) return showErr('Pick what\'s wrong with your vehicle.');
+  if (n === 5 && !$('zip').value.trim()) return showErr('Enter your ZIP code so shops near you can bid.');
+  if (n === 5) renderSummary();
+  document.querySelectorAll('.step').forEach(s => s.classList.toggle('on', +s.dataset.step === n));
+  renderSteps(n);
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll('[data-next]').forEach(b => b.onclick = () => go(+b.dataset.next));
+
+// Issue grid
+$('issues').innerHTML = ISSUES.map(([name, ico]) =>
+  `<div class="choice" data-name="${esc(name)}"><span class="ico">${ico}</span>${esc(name)}</div>`).join('')
+  + (preset === 'tow' ? `<div class="choice picked" data-name="Tow"><span class="ico">🛻</span>Tow needed</div>` : '');
+if (preset === 'tow') $('to3').disabled = false, $('to3').style.opacity = 1;
+document.querySelectorAll('#issues .choice').forEach(c => c.onclick = () => {
+  document.querySelectorAll('#issues .choice').forEach(x => x.classList.remove('picked'));
+  c.classList.add('picked');
+  state.issue = c.dataset.name;
+  $('to3').disabled = false; $('to3').style.opacity = 1;
+});
+
+// Description counter
+$('description').oninput = e => $('dcount').textContent = e.target.value.length;
+
+// Radius pills
+document.querySelectorAll('#radii .pill').forEach(p => p.onclick = () => {
+  document.querySelectorAll('#radii .pill').forEach(x => x.classList.remove('on'));
+  p.classList.add('on');
+  state.radius = +p.dataset.r;
+  $('rmap').textContent = state.radius + ' miles';
+});
+
+// Photo previews
+$('photos').onchange = e => {
+  for (const f of e.target.files) {
+    if (state.photoFiles.length >= 5) break;
+    state.photoFiles.push(f);
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(f);
+    $('photogrid').insertBefore(img, $('photogrid').firstChild);
+  }
+  e.target.value = '';
+};
+
+function renderSummary() {
+  $('summary').innerHTML = `
+    <div class="kv"><span class="k">🚗 Vehicle</span><span class="v">${esc($('year').value)} ${esc($('make').value)} ${esc($('model').value)}</span></div>
+    <div class="kv"><span class="k">🔧 Issue</span><span class="v">${esc(state.issue)}${$('issue_detail').value.trim() ? ' (' + esc($('issue_detail').value.trim()) + ')' : ''}</span></div>
+    <div class="kv"><span class="k">📍 Location</span><span class="v">${esc($('zip').value)} (${state.radius} mi radius)</span></div>
+    <div class="kv"><span class="k">📷 Photos</span><span class="v">${state.photoFiles.length ? state.photoFiles.length + ' added' : 'None'}</span></div>`;
+}
+
+$('submit').onclick = async () => {
+  clearErr();
+  const fd = new FormData();
+  fd.append('year', $('year').value);
+  fd.append('make', $('make').value.trim());
+  fd.append('model', $('model').value.trim());
+  fd.append('mileage', $('mileage').value.trim());
+  fd.append('issue_category', state.issue);
+  fd.append('issue_detail', $('issue_detail').value.trim());
+  fd.append('description', $('description').value.trim());
+  fd.append('zip', $('zip').value.trim());
+  fd.append('radius_mi', state.radius);
+  state.photoFiles.forEach(f => fd.append('photos', f));
+  try {
+    const r = await api('/api/requests', { method: 'POST', body: fd });
+    location.href = '/customer/requests.html?new=' + r.id;
+  } catch (e) { showErr(e.message); }
+};
+
+(async () => { if (await guard('customer')) { go(1); bottomNav('customer', 'home.html'); } })();
+</script>
+</body>
+</html>

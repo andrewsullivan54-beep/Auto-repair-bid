@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Your Bids — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/shop/dashboard.html">‹</a>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <div id="view-list">
+      <h1>Your Bids</h1>
+      <div class="tabs" id="tabs">
+        <div class="tab on" data-tab="active">Active</div>
+        <div class="tab" data-tab="won">Won</div>
+        <div class="tab" data-tab="history">History</div>
+      </div>
+      <div id="list"></div>
+    </div>
+    <div id="view-won" style="display:none">
+      <div class="trophy">🏆</div>
+      <h1 class="center">You've Been Selected!</h1>
+      <p class="sub center">The customer has chosen your shop. You'll be contacted shortly with their details.</p>
+      <div class="card" id="woncard"></div>
+      <div id="wonescrow"></div>
+      <button class="btn" id="backlist">Back to My Bids</button>
+      <p class="hint center">The $25 platform fee is settled out of the escrowed payment when the job is released.</p>
+    </div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+let tab = 'active';
+async function load() {
+  const rows = await api('/api/bids/mine?tab=' + tab);
+  const list = $('list');
+  if (!rows.length) {
+    list.innerHTML = `<div class="card center"><p class="sub">${
+      tab === 'won' ? 'No wins yet — keep bidding!' :
+      tab === 'history' ? 'Nothing in history yet.' :
+      'No active bids. Browse requests and submit your first bid.'}</p></div>`;
+    return;
+  }
+  list.innerHTML = rows.map(b => `
+    <div class="card bid-card" ${tab === 'won' ? `onclick="showWon(${b.request_id})" style="cursor:pointer"` : ''}>
+      <div class="bid-top">
+        ${b.thumb ? `<img src="${esc(b.thumb)}" class="avatar" style="object-fit:cover">` : '<div class="avatar">🚗</div>'}
+        <div class="grow">
+          <b>${esc(b.year)} ${esc(b.make)} ${esc(b.model)}</b><br>
+          <span class="muted small">${esc(b.issue_category)}${b.issue_detail ? ' (' + esc(b.issue_detail) + ')' : ''}</span><br>
+          <span class="muted small">${esc(b.warranty || '')}</span><br>
+          <span class="small">${tab === 'won' ? '<span class="tag green">✓ Won</span>' : tab === 'history' ? '<span class="tag">Closed</span>' : '<span class="tag blue">Bid Submitted</span>'}</span>
+          <span class="muted small"> · ${timeAgo(b.created_at)}</span>
+        </div>
+        <div class="price">${money(b.total)}</div>
+      </div>
+    </div>`).join('');
+}
+
+async function showWon(requestId) {
+  const r = await api('/api/requests/' + requestId);
+  $('view-list').style.display = 'none';
+  $('view-won').style.display = 'block';
+  $('woncard').innerHTML = `
+    <div class="kv"><span class="k">🚗 Vehicle</span><span class="v">${esc(r.year)} ${esc(r.make)} ${esc(r.model)}</span></div>
+    <div class="kv"><span class="k">🔧 Job</span><span class="v">${esc(r.issue_category)}</span></div>
+    ${r.customer ? `
+    <div class="kv"><span class="k">👤 Customer</span><span class="v">${esc(r.customer.name)}</span></div>
+    <div class="kv"><span class="k">📞 Phone</span><span class="v">${esc(r.customer.phone || '—')}</span></div>
+    <div class="kv"><span class="k">✉️ Email</span><span class="v">${esc(r.customer.email)}</span></div>` : ''}`;
+  renderWonEscrow(r);
+  window.scrollTo(0, 0);
+}
+
+// Escrow panel on the won-job screen: payout preview, completion, add-ons,
+// cancellations, disputes, no-shows, and the audit trail
+function renderWonEscrow(r) {
+  const e = r.escrow || {};
+  const autoHrs = r.autoReleaseHours || 72;
+  let html = '<div class="card"><h3 style="margin-top:0">💰 Escrow</h3>';
+  if (e.payment_status === 'held') {
+    html += `<p><span class="tag blue">✓ ${money(e.amountHeld)} held</span></p>
+      <div class="kv"><span class="k">Held in escrow</span><span class="v">${money(e.amountHeld)}</span></div>
+      <div class="kv"><span class="k">You get on release ($${e.platformFee} platform fee)</span><span class="v gold">${money(e.shopPayout)}</span></div>`;
+    if (r.status === 'disputed') {
+      html += `<p><span class="tag red">⚠️ Disputed — payout held</span></p>
+        <p class="sub">Customer reported: “${esc(r.dispute_reason || '')}”. Payout stays held during review. Resolution process TBD.</p>`;
+    } else if (!r.shop_confirmed_done) {
+      html += `<button class="btn" id="donebtn">Mark Repair Completed</button>`;
+    } else if (!r.customer_confirmed_done) {
+      const hrsLeft = autoCountdown(r.completed_at, autoHrs);
+      html += `<p class="hint center">Waiting on the customer to confirm the work.${hrsLeft !== null ? ` Auto-releases in about ${hrsLeft} if they don't respond.` : ''}</p>`;
+    }
+  } else if (e.payment_status === 'released') {
+    html += `<p><span class="tag green">✓ ${money(e.shopPayout)} released to you</span></p>
+      <div class="kv"><span class="k">Platform fee</span><span class="v">${money(e.platformFee)}</span></div>`
+      + (e.autoReleased ? `<p class="hint">Auto-released after ${autoHrs}h with no customer response.</p>` : '');
+  } else if (e.payment_status === 'refunded') {
+    html += `<p><span class="tag blue">↩ Booking cancelled — ${money(r.refunded_amount || 0)} refunded to customer</span></p>`;
+  } else {
+    html += `<p class="hint">Waiting on the customer to pay &amp; book — then funds are held in escrow until you both confirm the work is done.</p>`;
+  }
+  if (r.status === 'cancelled_customer' || r.status === 'cancelled_shop') {
+    html += `<div class="divider"></div><p><span class="tag">✕ Booking cancelled${r.status === 'cancelled_customer' ? ' by the customer' : ''}</span></p>`;
+  } else if (r.status === 'no_show') {
+    html += `<div class="divider"></div><p><span class="tag">🚫 You reported a customer no-show</span></p>
+      <p class="hint">Payout held — no-show refund/compensation policy is still being finalized.</p>`;
+  }
+  // Shop actions while the job is active
+  if (r.status === 'assigned') {
+    html += `<div class="divider"></div><div class="btn-row">
+      <button class="btn btn-ghost" id="shopcancelbtn">Cancel Job</button>
+      ${e.payment_status === 'held' && !r.shop_confirmed_done ? '<button class="btn btn-ghost" id="noshowbtn">Customer No-Show</button>' : ''}
+    </div>
+    <p class="hint center">Cancelling refunds the customer's held payment in full (simulated).</p>`;
+  }
+  html += '</div>';
+  if (r.status === 'assigned') {
+    html += `<div class="card"><h3 style="margin-top:0">➕ Extra Work / Add-ons</h3>
+      <p class="hint">Extra work must go through the app — propose it here. The customer must explicitly approve it in-app before it's authorized; it's never auto-added.</p>
+      <label>Description</label>
+      <input type="text" id="addon-desc" placeholder="e.g. Rear brake pads also worn">
+      <label>Amount ($)</label>
+      <input type="number" id="addon-amt" min="1" step="1" placeholder="120" inputmode="decimal">
+      <button class="btn" id="addonbtn">Propose Add-on</button>
+      <div style="margin-top:10px">` +
+      (r.addons && r.addons.length ? r.addons.map(a => `
+        <div class="kv"><span class="k">${esc(a.description)}</span><span class="v">${money(a.amount)} — ${a.status}</span></div>`).join('')
+        : '<p class="hint">No add-ons yet.</p>') + '</div></div>';
+  }
+  html += '<div id="timeline"></div>';
+  $('wonescrow').innerHTML = html;
+  const donebtn = $('donebtn');
+  if (donebtn) donebtn.onclick = async () => {
+    if (!confirm('Mark this repair as completed? The customer will be asked to confirm.')) return;
+    const res = await api(`/api/requests/${r.id}/shop-complete`, { method: 'POST' });
+    if (res.released) alert(`Released! ${money(res.shopPayout)} is on its way to you.`);
+    showWon(r.id);
+  };
+  const scbtn = $('shopcancelbtn');
+  if (scbtn) scbtn.onclick = async () => {
+    if (!confirm('Cancel this job? The customer gets a full refund of any held payment (simulated).')) return;
+    try { await api(`/api/requests/${r.id}/cancel`, { method: 'POST' }); showWon(r.id); }
+    catch (err) { alert(err.message); }
+  };
+  const nsbtn = $('noshowbtn');
+  if (nsbtn) nsbtn.onclick = async () => {
+    if (!confirm('Report this customer as a no-show? Payout stays held — policy TBD.')) return;
+    try { await api(`/api/requests/${r.id}/no-show`, { method: 'POST' }); showWon(r.id); }
+    catch (err) { alert(err.message); }
+  };
+  const addonbtn = $('addonbtn');
+  if (addonbtn) addonbtn.onclick = async () => {
+    const desc = $('addon-desc').value.trim(), amt = +$('addon-amt').value || 0;
+    if (!desc || amt <= 0) return alert('Describe the extra work and enter an amount.');
+    try {
+      await api(`/api/requests/${r.id}/addons`, { method: 'POST', body: { description: desc, amount: amt } });
+      showWon(r.id);
+    } catch (err) { alert(err.message); }
+  };
+  // Audit trail
+  renderTimeline(r.id);
+}
+$('backlist').onclick = () => {
+  $('view-won').style.display = 'none';
+  $('view-list').style.display = 'block';
+};
+
+document.querySelectorAll('#tabs .tab').forEach(t => t.onclick = () => {
+  document.querySelectorAll('#tabs .tab').forEach(x => x.classList.remove('on'));
+  t.classList.add('on');
+  tab = t.dataset.tab;
+  load();
+});
+(async () => { if (await guard('shop')) { bottomNav('shop', 'bids.html'); load(); } })();
+</script>
+</body>
+</html>

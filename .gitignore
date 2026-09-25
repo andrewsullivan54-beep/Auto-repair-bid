@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Secrets / local config
+.env
+.env.*
+
+# Local dev database + uploads (never commit user data)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.db
+uploads/
+
+# Native build outputs
+ios/build/
+ios/App/build/
+ios/DerivedData/
+android/build/
+android/.gradle/
+android/app/build/
+android/local.properties
+
+# OS / editor / logs
+.DS_Store
+*.log
+.vscode/

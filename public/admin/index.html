@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin — Attention List</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <a class="back" href="/">‹</a>
+    <div class="brand"><span class="car">⚙️</span> ADMIN <b>DEMO</b></div>
+    <span></span>
+  </div>
+  <div class="wrap">
+    <h1>⚠️ Needs Attention</h1>
+    <p class="sub">Tow jobs every partner passed on or let expire. Stubbed v1 admin — read-only.</p>
+    <div class="err" id="err"></div>
+    <div id="list"></div>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  const me = await api('/api/me');
+  if (!me.loggedIn) { location.href = '/login.html'; return; }
+  try {
+    const rows = await api('/api/admin/unassigned-tows');
+    $('list').innerHTML = !rows.length
+      ? '<div class="card center"><p class="sub">All clear — no unassigned tows.</p></div>'
+      : rows.map(t => `
+        <div class="card">
+          <div class="row"><div class="grow"><b>Tow #${t.id}</b>
+            <span class="muted small"> · ${esc((t.created_at || '').replace(' ', ' · '))}</span></div>
+            <span class="tag red">⚠️ Unassigned</span></div>
+          <div class="divider"></div>
+          <div class="kv"><span class="k">👤 Customer</span><span class="v">${esc(t.customer_name || '')}${t.customer_phone ? ' · ' + esc(t.customer_phone) : ''}</span></div>
+          <div class="kv"><span class="k">📍 Pickup</span><span class="v">${esc(t.pickup)}</span></div>
+          <div class="kv"><span class="k">🏁 Dropoff</span><span class="v">${esc(t.dropoff)}</span></div>
+          <div class="kv"><span class="k">📣 Offers made</span><span class="v">${t.offers_made} partner(s)</span></div>
+          ${t.request_id ? `<div class="kv"><span class="k">🔗 Repair job</span><span class="v">#${t.request_id}</span></div>` : ''}
+          <p class="hint">Call the customer directly and arrange a tow manually.</p>
+        </div>`).join('');
+  } catch (e) { showErr(e.message); }
+})();
+</script>
+</body>
+</html>

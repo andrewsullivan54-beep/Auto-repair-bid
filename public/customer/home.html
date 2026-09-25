@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Home — Auto Repair Bids</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<div class="phone">
+  <div class="topbar">
+    <span></span>
+    <div class="brand"><span class="car">🚗</span> AUTO REPAIR <b>BIDS</b></div>
+    <a class="icon-btn" href="/customer/requests.html">🔔</a>
+  </div>
+  <div class="wrap">
+    <a href="/customer/new-request.html" style="text-decoration:none;color:inherit">
+      <p class="small muted">📍 Greater Cincinnati Area</p>
+    </a>
+    <h1>DON'T SETTLE FOR<br>THE FIRST PRICE.</h1>
+    <p class="sub">Let local shops compete for your business.</p>
+
+    <a class="card tappable" href="/customer/new-request.html">
+      <div class="row">
+        <span style="font-size:28px">🔧</span>
+        <div class="grow"><b>Get My Car Repaired</b><br><span class="muted small">Post a repair request and receive bids from local shops</span></div>
+        <span class="gold">›</span>
+      </div>
+    </a>
+    <a class="card tappable" href="/customer/tow.html">
+      <div class="row">
+        <span style="font-size:28px">🛻</span>
+        <div class="grow"><b>I Need a Tow</b><br><span class="muted small">Request a tow from our trusted partner</span></div>
+        <span class="gold">›</span>
+      </div>
+    </a>
+
+    <h3>Quick Services</h3>
+    <div class="card">
+      <div class="row" style="justify-content:space-around;text-align:center">
+        <a href="/customer/new-request.html?service=Tires" style="text-decoration:none;color:inherit"><div style="font-size:26px">🛞</div><div class="small muted">Tires</div></a>
+        <a href="/customer/new-request.html?service=Battery" style="text-decoration:none;color:inherit"><div style="font-size:26px">🔋</div><div class="small muted">Battery</div></a>
+        <a href="/customer/new-request.html?service=AC/Heat" style="text-decoration:none;color:inherit"><div style="font-size:26px">❄️</div><div class="small muted">AC/Heat</div></a>
+        <a href="/customer/new-request.html" style="text-decoration:none;color:inherit"><div style="font-size:26px">⋯</div><div class="small muted">More</div></a>
+      </div>
+    </div>
+
+    <a class="btn btn-ghost" href="/customer/requests.html">View My Requests</a>
+    <a class="logout" id="logout">Log out</a>
+  </div>
+</div>
+<script src="/js/config.js"></script>
+<script src="/js/common.js"></script>
+<script>
+(async () => {
+  const me = await guard('customer');
+  if (!me) return;
+  bottomNav('customer', 'home.html');
+  document.getElementById('logout').onclick = logout;
+})();
+</script>
+</body>
+</html>
