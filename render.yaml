@@ -1,0 +1,29 @@
+# render.yaml — one-click deploy for Auto Repair Bids on Render.com
+#
+# The database (SQLite) and photo uploads live on a persistent disk so
+# they survive deploys and restarts. Everything else is stateless.
+#
+# DEPLOY (all in the browser, ~5 minutes):
+#   1. Create a free account at https://render.com (sign up with GitHub).
+#   2. Dashboard -> New -> Blueprint -> connect the Auto-repair-bid repo.
+#   3. Render reads this file and shows the plan below -> Apply.
+#   4. First deploy takes a few minutes; the app seeds its demo accounts
+#      automatically on first boot.
+
+services:
+  - type: web
+    name: auto-repair-bids
+    runtime: node
+    plan: starter
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /
+    disk:
+      name: arb-data
+      mountPath: /opt/render/project/src/arb-data
+      sizeGB: 1
+    envVars:
+      - key: DATA_DIR
+        value: /opt/render/project/src/arb-data
+      - key: NODE_ENV
+        value: production

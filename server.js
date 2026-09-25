@@ -48,14 +48,17 @@ const TOW_FEE = 15;
 // sets the real window (see README open questions).
 const TOW_ACCEPT_WINDOW_MINUTES = 10;
 const ROOT = __dirname;
+// DATA_DIR lets hosted environments (Render, etc.) point the SQLite file
+// and uploads at a persistent disk. Local dev keeps using the project root.
+const DATA_DIR = process.env.DATA_DIR || ROOT;
 const PUBLIC_DIR = path.join(ROOT, 'public');
-const UPLOAD_DIR = path.join(ROOT, 'uploads');
+const UPLOAD_DIR = path.join(DATA_DIR, 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 /* ------------------------------------------------------------------ */
 /* Database                                                            */
 /* ------------------------------------------------------------------ */
-const db = new DatabaseSync(path.join(ROOT, 'data.sqlite'));
+const db = new DatabaseSync(path.join(DATA_DIR, 'data.sqlite'));
 db.exec('PRAGMA foreign_keys = ON;');
 
 // Small helper: run fn() inside a transaction (node:sqlite has no
