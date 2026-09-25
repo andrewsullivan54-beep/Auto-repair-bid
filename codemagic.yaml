@@ -18,8 +18,8 @@ workflows:
     environment:
       vars:
         BUNDLE_ID: "com.autorepairbids.app"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
-        XCODE_SCHEME: "App"
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
+        XCODE_TARGET: "App"
       xcode: latest
       node: 24
       java: 21
@@ -39,7 +39,9 @@ workflows:
       #      Codemagic screen.
       #   4. Uncomment the ios_signing block below, and swap the "Build iOS
       #      app" script step for the signed "Build signed IPA" step that is
-      #      provided (commented out) further down.
+      #      provided (commented out) further down. Note: this repo has no
+      #      .xcworkspace or shared scheme, so the signed step uses
+      #      --project + --target (same as the unsigned step).
       # ------------------------------------------------------------------
       # ios_signing:
       #   distribution_type: ad_hoc   # or: app_store
@@ -59,29 +61,27 @@ workflows:
       - name: Sync Capacitor web assets into the native projects
         script: |
           npx cap sync
-      - name: Build iOS app (unsigned archive — validates compilation)
+      - name: Build iOS app (unsigned — validates compilation)
         script: |
           xcodebuild \
-            -workspace "$XCODE_WORKSPACE" \
-            -scheme "$XCODE_SCHEME" \
+            -project "$XCODE_PROJECT" \
+            -target "$XCODE_TARGET" \
             -configuration Release \
             -destination 'generic/platform=iOS' \
-            -archivePath "$CM_BUILD_DIR/App.xcarchive" \
             CODE_SIGNING_ALLOWED=NO \
-            archive
+            build
       # TODO — signed .ipa (see the CODE SIGNING note in environment above):
       # - name: Build signed IPA
       #   script: |
       #     keychain initialize
       #     xcode-project use-profiles
       #     xcode-project build-ipa \
-      #       --workspace "$XCODE_WORKSPACE" \
-      #       --scheme "$XCODE_SCHEME"
+      #       --project "$XCODE_PROJECT" \
+      #       --target "$XCODE_TARGET"
       - name: Build Android debug APK
         script: |
           echo "sdk.dir=${ANDROID_SDK_ROOT:-$ANDROID_HOME}" > android/local.properties
           chmod +x android/gradlew
           cd android && ./gradlew assembleDebug
     artifacts:
-      - App.xcarchive
       - android/app/build/outputs/apk/debug/*.apk
