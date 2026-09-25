@@ -249,6 +249,23 @@ c) **The iPhone build (.ipa) needs a Mac** — it cannot be built on Windows
    MacInCloud, Codemagic, or a GitHub Actions macOS runner. (The Android
    .apk CAN be built on Windows with Android Studio.)
 
+### Building without a Mac (Codemagic cloud builds)
+
+No Mac? No problem — a Mac in the cloud builds the iPhone app for you.
+`codemagic.yaml` (project root) is already wired up and committed:
+
+1. Create a **free** account at codemagic.io (sign in with GitHub).
+2. Push this repo to GitHub, add it as an application in Codemagic, and set
+   its build configuration to `codemagic.yaml`.
+3. Push to `main` — the `ios-android-debug` workflow runs automatically:
+   `npm ci` → `npx cap sync` → unsigned iOS archive + Android debug APK.
+
+What you get today: proof the iPhone app compiles on a real Mac, plus an
+Android APK you can install directly on a phone. A signed `.ipa` for
+TestFlight and the App Store still needs the Apple Developer account
+($99/yr) — when that's ready, follow the TODO comments in `codemagic.yaml`
+to plug in the certificate + provisioning profile.
+
 ## Stubbed for later (not real yet)
 
 - **Real payments** — every "Pay" button in the app is **simulated**: it flips
